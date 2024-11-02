@@ -18,6 +18,8 @@ typedef struct allocation {
 typedef struct {
     void *pool;
     size_t total_size;
+    allocation_t *free_blocks;
+    allocation_t *allocated_blocks;
     allocation_t *head;
     AllocationStrategy strategy;
 } mymemory_t;
