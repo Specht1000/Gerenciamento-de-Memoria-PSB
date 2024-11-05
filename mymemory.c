@@ -190,8 +190,8 @@ void* mymemory_alloc(mymemory_t *memory, size_t size)
                 prev = &current->next;  // Avança o ponteiro para o próximo bloco
                 current = current->next;  // Avança o ponteiro
             }
-            if (best_block) 
-            {  // Se um bloco adequado foi encontrado
+            if (best_block) // Se um bloco adequado foi encontrado
+            {  
                 allocated_start = best_block->start;  // Define o início do bloco alocado
                 *prev_best = best_block->next;  // Atualiza o ponteiro do bloco anterior
                 allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));  // Cria novo bloco alocado
