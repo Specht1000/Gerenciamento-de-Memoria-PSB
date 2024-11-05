@@ -9,53 +9,53 @@
 
 // Função auxiliar para imprimir o estado atual da memória em ordem de endereços
 void print_memory_layout(mymemory_t *memory) {
-    allocation_t *allocated = memory->allocated_blocks;
-    allocation_t *free_blocks = memory->free_blocks;
+    allocation_t *allocated = memory->allocated_blocks;  // Ponteiro para a lista de blocos alocados
+    allocation_t *free_blocks = memory->free_blocks;  // Ponteiro para a lista de blocos livres
 
     // Criar uma lista de todos os blocos (alocados e livres) em ordem de endereços
-    allocation_t *all_blocks = NULL;
-    allocation_t **tail = &all_blocks;
+    allocation_t *all_blocks = NULL;  // Inicializa a lista combinada de blocos
+    allocation_t **tail = &all_blocks;  // Ponteiro para o final da lista combinada
 
-    while (allocated || free_blocks) {
-        allocation_t **next_block = &free_blocks;
-        if (allocated && (!free_blocks || allocated->start < free_blocks->start)) {
-            next_block = &allocated;
+    while (allocated || free_blocks) {  // Continua enquanto houver blocos alocados ou livres
+        allocation_t **next_block = &free_blocks;  // Por padrão, escolhe um bloco livre
+        if (allocated && (!free_blocks || allocated->start < free_blocks->start)) {  // Se o bloco alocado tem um endereço menor ou não há blocos livres
+            next_block = &allocated;  // Seleciona o bloco alocado
         }
 
-        *tail = (allocation_t *)malloc(sizeof(allocation_t));
-        **tail = **next_block;
-        (*tail)->next = NULL;
+        *tail = (allocation_t *)malloc(sizeof(allocation_t));  // Aloca um novo bloco na lista combinada
+        **tail = **next_block;  // Copia os dados do bloco selecionado para a nova entrada
+        (*tail)->next = NULL;  // Define o próximo do novo bloco como NULL
 
-        tail = &(*tail)->next;
-        *next_block = (*next_block)->next;
+        tail = &(*tail)->next;  // Move o ponteiro de cauda para o próximo
+        *next_block = (*next_block)->next;  // Avança para o próximo bloco na lista de origem
     }
 
-    printf("\nEstado atual da memoria:\n");
+    printf("\nEstado atual da memoria:\n");  // Cabeçalho do relatório
     printf("+----------------------+----------------------+----------+---------+\n");
     printf("| Inicio               | Fim                  | Tamanho  | Estado  |\n");
     printf("+----------------------+----------------------+----------+---------+\n");
 
-    allocation_t *current = all_blocks;
-    while (current) {
-        const char *estado = "Livre";
-        for (allocation_t *iter = memory->allocated_blocks; iter != NULL; iter = iter->next) {
-            if (iter->start == current->start) {
-                estado = "Alocado";
+    allocation_t *current = all_blocks;  // Inicia a impressão da lista combinada
+    while (current) {  // Percorre todos os blocos
+        const char *estado = "Livre";  // Assume que o bloco é livre
+        for (allocation_t *iter = memory->allocated_blocks; iter != NULL; iter = iter->next) {  // Verifica se o bloco está na lista de alocados
+            if (iter->start == current->start) {  // Se o início do bloco corresponde ao de um bloco alocado
+                estado = "Alocado";  // Marca o bloco como alocado
                 break;
             }
         }
-        printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",
+        printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",  // Imprime os detalhes do bloco
                current->start,
                (char *)current->start + current->size - 1,
                (unsigned long)current->size,
                estado);
         printf("+----------------------+----------------------+----------+---------+\n");
-        current = current->next;
+        current = current->next;  // Avança para o próximo bloco
     }
 
     // Liberar a lista temporária
-    current = all_blocks;
-    while (current) {
+    current = all_blocks;  // Reinicia o ponteiro para liberar os blocos combinados
+    while (current) {  // Libera cada bloco na lista combinada
         allocation_t *temp = current;
         current = current->next;
         free(temp);
@@ -78,107 +78,108 @@ mymemory_t* mymemory_init(size_t size, AllocationStrategy strategy) {
 
 // Função para alocar um bloco de memória
 void* mymemory_alloc(mymemory_t *memory, size_t size) {
-    allocation_t *current = memory->free_blocks;
-    allocation_t *best_block = NULL;
-    allocation_t **prev_best = NULL;
-    allocation_t **prev = &memory->free_blocks;
-    void *allocated_start = NULL;
+    allocation_t *current = memory->free_blocks;  // Ponteiro para percorrer os blocos livres
+    allocation_t *best_block = NULL;  // Melhor bloco na estratégia Best Fit
+    allocation_t **prev_best = NULL;  // Ponteiro para o bloco anterior ao melhor bloco
+    allocation_t **prev = &memory->free_blocks;  // Ponteiro para o bloco anterior na lista de blocos livres
+    void *allocated_start = NULL;  // Endereço do início do bloco alocado
 
-    switch (memory->strategy) {
-        case FIRST_FIT:
-            while (current) {
-                if (current->size >= size) {
-                    allocated_start = current->start;
-                    *prev = current->next;
-                    allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));
-                    new_alloc->start = allocated_start;
-                    new_alloc->size = size;
-                    new_alloc->next = memory->allocated_blocks;
-                    memory->allocated_blocks = new_alloc;
+    switch (memory->strategy) {  // Seleciona a estratégia de alocação
+        case FIRST_FIT: 
+            while (current) {  // Percorre a lista de blocos livres
+                if (current->size >= size) {  // Verifica se o bloco atual é grande o suficiente
+                    allocated_start = current->start;  // Armazena o início do bloco alocado
+                    *prev = current->next;  // Atualiza o ponteiro para o próximo bloco livre
+                    allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));  // Cria nova entrada para o bloco alocado
+                    new_alloc->start = allocated_start;  // Define o início do bloco alocado
+                    new_alloc->size = size;  // Define o tamanho do bloco alocado
+                    new_alloc->next = memory->allocated_blocks;  // Insere o bloco na lista de alocados
+                    memory->allocated_blocks = new_alloc;  // Atualiza o início da lista de alocados
 
-                    if (current->size > size) {
-                        current->start = (char*)current->start + size;
-                        current->size -= size;
-                        current->next = memory->free_blocks;
-                        memory->free_blocks = current;
+                    if (current->size > size) {  // Se o bloco livre é maior que o necessário
+                        current->start = (char*)current->start + size;  // Atualiza o início do bloco livre restante
+                        current->size -= size;  // Ajusta o tamanho do bloco livre restante
+                        current->next = memory->free_blocks;  // Reinsere o bloco restante na lista de livres
+                        memory->free_blocks = current;  // Atualiza o início da lista de livres
                     } else {
-                        free(current);
+                        free(current);  // Libera o bloco se o tamanho for exatamente o necessário
                     }
-                    return allocated_start;
+                    return allocated_start;  // Retorna o endereço do início do bloco alocado
                 }
-                prev = &current->next;
-                current = current->next;
+                prev = &current->next;  // Avança para o próximo bloco
+                current = current->next;  // Avança o ponteiro
             }
             break;
 
-        case BEST_FIT:
-            while (current) {
-                if (current->size >= size && (!best_block || current->size < best_block->size)) {
-                    best_block = current;
-                    prev_best = prev;
+        case BEST_FIT: 
+            while (current) {  // Percorre a lista de blocos livres
+                if (current->size >= size && (!best_block || current->size < best_block->size)) {  // Encontra o menor bloco adequado
+                    best_block = current;  // Armazena o melhor bloco encontrado
+                    prev_best = prev;  // Atualiza o ponteiro para o bloco anterior
                 }
-                prev = &current->next;
-                current = current->next;
+                prev = &current->next;  // Avança o ponteiro para o próximo bloco
+                current = current->next;  // Avança o ponteiro
             }
-            if (best_block) {
-                allocated_start = best_block->start;
-                *prev_best = best_block->next;
-                allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));
-                new_alloc->start = allocated_start;
-                new_alloc->size = size;
-                new_alloc->next = memory->allocated_blocks;
-                memory->allocated_blocks = new_alloc;
+            if (best_block) {  // Se um bloco adequado foi encontrado
+                allocated_start = best_block->start;  // Define o início do bloco alocado
+                *prev_best = best_block->next;  // Atualiza o ponteiro do bloco anterior
+                allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));  // Cria novo bloco alocado
+                new_alloc->start = allocated_start;  // Define o início do bloco alocado
+                new_alloc->size = size;  // Define o tamanho do bloco alocado
+                new_alloc->next = memory->allocated_blocks;  // Insere o bloco na lista de alocados
+                memory->allocated_blocks = new_alloc;  // Atualiza o início da lista de alocados
 
-                if (best_block->size > size) {
-                    best_block->start = (char*)best_block->start + size;
-                    best_block->size -= size;
-                    best_block->next = memory->free_blocks;
-                    memory->free_blocks = best_block;
+                if (best_block->size > size) {  // Se o bloco é maior que o necessário
+                    best_block->start = (char*)best_block->start + size;  // Atualiza o início do bloco restante
+                    best_block->size -= size;  // Ajusta o tamanho do bloco restante
+                    best_block->next = memory->free_blocks;  // Reinsere o bloco restante na lista de livres
+                    memory->free_blocks = best_block;  // Atualiza o início da lista de livres
                 } else {
-                    free(best_block);
+                    free(best_block);  // Libera o bloco se o tamanho for exatamente o necessário
                 }
-                return allocated_start;
+                return allocated_start;  // Retorna o endereço do início do bloco alocado
             }
             break;
 
         case WORST_FIT: {
-            allocation_t *worst_block = NULL;
-            allocation_t **prev_worst = NULL;
-            current = memory->free_blocks;
-            prev = &memory->free_blocks;
+            allocation_t *worst_block = NULL;  // Maior bloco na estratégia Worst Fit
+            allocation_t **prev_worst = NULL;  // Ponteiro para o bloco anterior ao maior bloco
+            current = memory->free_blocks;  // Recomeça a percorrer os blocos livres
+            prev = &memory->free_blocks;  // Reinicia o ponteiro para o bloco anterior
 
-            while (current) {
-                if (current->size >= size && (!worst_block || current->size > worst_block->size)) {
-                    worst_block = current;
-                    prev_worst = prev;
+            while (current) {  // Percorre a lista de blocos livres
+                if (current->size >= size && (!worst_block || current->size > worst_block->size)) {  // Encontra o maior bloco adequado
+                    worst_block = current;  // Armazena o pior bloco encontrado
+                    prev_worst = prev;  // Atualiza o ponteiro para o bloco anterior
                 }
-                prev = &current->next;
-                current = current->next;
+                prev = &current->next;  // Avança o ponteiro para o próximo bloco
+                current = current->next;  // Avança o ponteiro
             }
-            if (worst_block) {
-                allocated_start = worst_block->start;
-                *prev_worst = worst_block->next;
-                allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));
-                new_alloc->start = allocated_start;
-                new_alloc->size = size;
-                new_alloc->next = memory->allocated_blocks;
-                memory->allocated_blocks = new_alloc;
+            if (worst_block) {  // Se um bloco adequado foi encontrado
+                allocated_start = worst_block->start;  // Define o início do bloco alocado
+                *prev_worst = worst_block->next;  // Atualiza o ponteiro do bloco anterior
+                allocation_t *new_alloc = (allocation_t*)malloc(sizeof(allocation_t));  // Cria novo bloco alocado
+                new_alloc->start = allocated_start;  // Define o início do bloco alocado
+                new_alloc->size = size;  // Define o tamanho do bloco alocado
+                new_alloc->next = memory->allocated_blocks;  // Insere o bloco na lista de alocados
+                memory->allocated_blocks = new_alloc;  // Atualiza o início da lista de alocados
 
-                if (worst_block->size > size) {
-                    worst_block->start = (char*)worst_block->start + size;
-                    worst_block->size -= size;
-                    worst_block->next = memory->free_blocks;
-                    memory->free_blocks = worst_block;
+                if (worst_block->size > size) {  // Se o bloco é maior que o necessário
+                    worst_block->start = (char*)worst_block->start + size;  // Atualiza o início do bloco restante
+                    worst_block->size -= size;  // Ajusta o tamanho do bloco restante
+                    worst_block->next = memory->free_blocks;  // Reinsere o bloco restante na lista de livres
+                    memory->free_blocks = worst_block;  // Atualiza o início da lista de livres
                 } else {
-                    free(worst_block);
+                    free(worst_block);  // Libera o bloco se o tamanho for exatamente o necessário
                 }
-                return allocated_start;
+                return allocated_start;  // Retorna o endereço do início do bloco alocado
             }
             break;
         }
     }
-    return NULL;
+    return NULL;  // Retorna NULL se nenhum bloco adequado foi encontrado
 }
+
 
 // Função para liberar memória
 void mymemory_free(mymemory_t *memory, void *ptr) {
