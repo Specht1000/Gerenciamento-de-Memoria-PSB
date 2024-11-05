@@ -31,4 +31,4 @@ void mymemory_display(mymemory_t *memory);
 void mymemory_stats(mymemory_t *memory);
 void mymemory_cleanup(mymemory_t *memory);
 
-#endif /* MYMEMORY_H */
+#endif
