@@ -18,9 +18,9 @@ void print_memory_layout(mymemory_t *memory)
     allocation_t **tail = &all_blocks;  // Ponteiro para o final da lista combinada
 
     while (allocated || free_blocks) 
-    {  // Continua enquanto houver blocos alocados ou livres
+    {  
         allocation_t **next_block = &free_blocks;  // Por padrão, escolhe um bloco livre
-        if (allocated && (!free_blocks || allocated->start < free_blocks->start)) // Se o bloco alocado tem um endereço menor ou não há blocos livres
+        if (allocated && (!free_blocks || allocated->start < free_blocks->start)) 
         {  
             next_block = &allocated;  // Seleciona o bloco alocado
         }
@@ -39,24 +39,77 @@ void print_memory_layout(mymemory_t *memory)
     printf("+----------------------+----------------------+----------+---------+\n");
 
     allocation_t *current = all_blocks;  // Inicia a impressão da lista combinada
+    allocation_t *previous_free = NULL;  // Armazena o último bloco livre
+    unsigned long combined_size = 0;  // Tamanho combinado para blocos livres adjacentes
+    void *combined_start = NULL;  // Início combinado para blocos livres adjacentes
+
     while (current) // Percorre todos os blocos
     {  
         const char *estado = "Livre";  // Assume que o bloco é livre
-        for (allocation_t *iter = memory->allocated_blocks; iter != NULL; iter = iter->next) // Verifica se o bloco está na lista de alocados
+        for (allocation_t *iter = memory->allocated_blocks; iter != NULL; iter = iter->next) 
         {  
-            if (iter->start == current->start) // Se o início do bloco corresponde ao de um bloco alocado
+            if (iter->start == current->start) 
             {  
                 estado = "Alocado";  // Marca o bloco como alocado
                 break;
             }
         }
-        printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",  // Imprime os detalhes do bloco
-               current->start,
-               (char *)current->start + current->size - 1,
-               (unsigned long)current->size,
-               estado);
-        printf("+----------------------+----------------------+----------+---------+\n");
+
+        if (strcmp(estado, "Livre") == 0) // Se o bloco atual é livre
+        {  
+            if (previous_free && (char *)previous_free->start + previous_free->size == current->start) // Se o bloco livre atual é adjacente ao anterior
+            {  
+                combined_size += current->size;  // Atualiza o tamanho combinado
+            } 
+            else 
+            {  
+                if (previous_free) 
+                {  
+                    // Imprime o bloco livre combinado anterior
+                    printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",  
+                           combined_start,
+                           (char *)combined_start + combined_size - 1,
+                           combined_size,
+                           "Livre");
+                    printf("+----------------------+----------------------+----------+---------+\n");
+                }
+                // Inicia um novo bloco livre combinado
+                combined_start = current->start;
+                combined_size = current->size;
+            }
+            previous_free = current;  // Atualiza o bloco livre anterior
+        } 
+        else 
+        {  
+            if (previous_free) // Imprime o bloco livre combinado antes de mudar para alocado
+            {  
+                printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",  
+                       combined_start,
+                       (char *)combined_start + combined_size - 1,
+                       combined_size,
+                       "Livre");
+                printf("+----------------------+----------------------+----------+---------+\n");
+                previous_free = NULL;  // Reseta o bloco livre anterior
+            }
+            // Imprime o bloco alocado
+            printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",  
+                   current->start,
+                   (char *)current->start + current->size - 1,
+                   (unsigned long)current->size,
+                   estado);
+            printf("+----------------------+----------------------+----------+---------+\n");
+        }
         current = current->next;  // Avança para o próximo bloco
+    }
+
+    if (previous_free) // Imprime o último bloco livre combinado, se existir
+    {  
+        printf("| 0x%-18p | 0x%-18p | %8lu | %-7s |\n",  
+               combined_start,
+               (char *)combined_start + combined_size - 1,
+               combined_size,
+               "Livre");
+        printf("+----------------------+----------------------+----------+---------+\n");
     }
 
     // Liberar a lista temporária
@@ -252,24 +305,55 @@ void mymemory_display(mymemory_t *memory)
 // Exibe estatísticas de memória
 void mymemory_stats(mymemory_t *memory) 
 {
-    allocation_t *current = memory->allocated_blocks; // Ponteiro para iterar sobre os blocos alocados
-    unsigned long total_allocated = 0; // Inicializa o total de memória alocada
-    int alloc_count = 0; // Inicializa o contador de alocações
+    allocation_t *current = memory->allocated_blocks;  // Ponteiro para iterar sobre os blocos alocados
+    unsigned long total_allocated = 0;  // Inicializa o total de memória alocada
+    int alloc_count = 0;  // Inicializa o contador de alocações
 
     while (current) // Percorre a lista de blocos alocados
-    { 
-        total_allocated += current->size; // Acumula o tamanho dos blocos alocados
-        alloc_count++; // Incrementa o contador de alocações
-        current = current->next; // Avança para o próximo bloco
+    {  
+        total_allocated += current->size;  // Acumula o tamanho dos blocos alocados
+        alloc_count++;  // Incrementa o contador de alocações
+        current = current->next;  // Avança para o próximo bloco
     }
 
-    unsigned long total_free = memory->total_size - total_allocated; // Calcula a memória livre
+    unsigned long total_free = memory->total_size - total_allocated;  // Calcula a memória livre
+
+    // Estatísticas adicionais
+    current = memory->free_blocks;  // Ponteiro para iterar sobre os blocos livres
+    unsigned long max_free_block = 0;  // Maior bloco contíguo de memória livre
+    unsigned long current_contiguous_size = 0;
+    void *previous_end = NULL;
+    int free_fragments = 0;  // Número de fragmentos de memória livre
+
+    while (current) // Percorre a lista de blocos livres
+    {  
+        if (previous_end && (char *)previous_end + 1 == current->start) 
+        {
+            current_contiguous_size += current->size;  // Bloco contíguo encontrado
+        } else {
+            if (current_contiguous_size > max_free_block) // Novo bloco começa, finalize o bloco anterior
+            {
+                max_free_block = current_contiguous_size;
+            }
+            current_contiguous_size = current->size;  // Inicia novo bloco contíguo
+            free_fragments++;  // Conta o novo fragmento
+        }
+        previous_end = (char *)current->start + current->size - 1;
+        current = current->next;  // Avança para o próximo bloco
+    }
+
+    if (current_contiguous_size > max_free_block) // Finalizar verificação do último bloco contíguo
+    {
+        max_free_block = current_contiguous_size;
+    }
 
     // Exibe estatísticas de memória
     printf("Estatisticas de memoria:\n");
     printf("Total de alocacoes: %d\n", alloc_count);
     printf("Memoria total alocada: %lu bytes\n", total_allocated);
     printf("Memoria total livre: %lu bytes\n", total_free);
+    printf("Maior bloco livre contiguo: %lu bytes\n", max_free_block);
+    printf("Numero de fragmentos de memoria livre: %d\n", free_fragments);
 }
 
 // Limpa memória e libera recursos
