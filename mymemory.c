@@ -1,6 +1,6 @@
 // Trabalho 2 da disciplina de Programação de Software Básico
 // Eduardo Camana, Guilherme Specht e Isabella Cunha
-// Última atualização: 05/11/2024
+// Última atualização: 06/11/2024
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -267,27 +267,41 @@ void mymemory_free(mymemory_t *memory, void *ptr)
     allocation_t *current = memory->allocated_blocks; // Ponteiro para percorrer a lista de blocos alocados
     allocation_t *prev = NULL; // Armazena o bloco anterior
 
-    while (current && current->start != ptr) // Percorre a lista até encontrar o bloco a ser liberado
-    { 
+    // Verifica se o endereço passado é o início de um bloco alocado
+    int found = 0; // Variável de controle para identificar se o bloco foi encontrado
+    while (current) 
+    {
+        if (current->start == ptr) // Confirma que o endereço é o início do bloco
+        {
+            found = 1; // Marca como encontrado
+            break;
+        }
         prev = current;
         current = current->next;
     }
 
-    if (current) // Se o bloco foi encontrado
-    { 
+    if (!found) 
+    {
+        printf("O endereco fornecido nao corresponde ao inicio de um bloco alocado.\n");
+    }
+    else
+    {
+        // Se o bloco foi encontrado, libera o bloco
         if (prev) 
         {
             prev->next = current->next; // Remove o bloco da lista de alocados
         } 
         else 
         {
-            memory->allocated_blocks = current->next; // Atualiza o head se o bloco era o primeiro
+            memory->allocated_blocks = current->next; // Atualiza o início da lista alocada, se o bloco era o primeiro
         }
 
         current->next = memory->free_blocks; // Reinsere o bloco liberado na lista de livres
-        memory->free_blocks = current; // Atualiza o início da lista de livres
+        memory->free_blocks = current; // Atualiza o início da lista de blocos livres
+        printf("Memoria no endereco 0x%p liberada.\n", ptr); // Mensagem de sucesso
     }
 }
+
 
 // Exibe alocações atuais
 void mymemory_display(mymemory_t *memory) 
@@ -449,7 +463,7 @@ int main() {
                 printf("Digite o endereco (em hexadecimal sem o '0x') do bloco a ser liberado: ");
                 scanf("%p", &allocated_ptr);
                 mymemory_free(memory, allocated_ptr);
-                printf("Memoria no endereco 0x%p liberada.\n", allocated_ptr);
+                // printf("Memoria no endereco 0x%p liberada.\n", allocated_ptr);
                 break;
 
             case 4: // Exibir alocações atuais
